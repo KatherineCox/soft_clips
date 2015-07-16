@@ -19,10 +19,10 @@ import argparse
 #chr_name = 'gi|556503834|ref|NC_000913.3|'
 
 def parse_args():
-	parser = argparse.ArgumentParser(description='Find the soft-clipped breakpoints')
-	
-    parser.add_argument('-i','--input', type=str, required=True, help='SAM format alignment file')
-    parser.add_argument('-o','--output', type=str, required=True, help='Name for output file(s), _hits.bed will be appended')
+    parser = argparse.ArgumentParser(description='Find the soft-clipped breakpoints')
+    
+    parser.add_argument('input', type=str, help='SAM format alignment file')
+    parser.add_argument('output', type=str, help='Name for output file(s), _hits.bed will be appended')
     parser.add_argument('-t','--threshold', type=int, required=False, default=3, help='Threshold for including hits in the hits file. Default = 3.')
     parser.add_argument('-w','--window', type=int, required=False, default=3, help='Sliding window size for averaging number of hits at a position. Default = 5.')
     
@@ -49,24 +49,29 @@ def find_clip_locations():
                 pass
             else:
                 #grab the chromosome name, position, and the cigar string
-                chr_name, position, cigar = entries[2], int(entries[3]), entries[5]
-                #find the soft-clipped info
-                map_regions = re.findall('[0-9]+[MIDNSHP=X]', cigar)
-            
-                #check each of the cigar pieces to see if it's soft-clipped
-                #for each soft-clipped region, add the breakpoint to the dictionary
-                for region in map_regions:
-                    num_bases, cigar_type = int(region[:-1]), region[-1]
-                    position += num_bases
-                    if cigar_type == 'S':
-                
-                        ## uses a try/catch because this will only fail once per chromosome, so an if statement is wasteful
-                        try:
-                            breakpoint_counts[chr_name][position] = breakpoint_counts[chr_name].get(position, 0) + 1
-                        ## if the dictionary doesn't exist yet for this chromosome, make it, then add the breakpoint
-                        except KeyError:
-                            breakpoint_counts[chr_name] = {}
-                            breakpoint_counts[chr_name][position] = breakpoint_counts[chr_name].get(position, 0) + 1
+                chr_name, read_start, cigar = entries[2], int(entries[3]), entries[5]
+                #parse the cigar info, exclude hard-clipped regions (these can only be on the very edges, outside of soft-clips if soft-clipping is present)
+                map_regions = re.findall('[0-9]+[MIDNSP=X]', cigar)
+
+                # Get the first and last items from the cigar string and see if it's soft-clipped (last letter = S). Soft clips will only ever be at the ends (inside would be I/D/N)
+                # If so, find the breakpoint and add it to the dictionary
+                if map_regions[0][-1] == 'S':
+                    breakpoint = read_start
+                    try:
+                        breakpoint_counts[chr_name][breakpoint] = breakpoint_counts[chr_name].get(breakpoint, 0) + 1
+                    ## if the dictionary doesn't exist yet for this chromosome, make it, then add the breakpoint
+                    except KeyError:
+                        breakpoint_counts[chr_name] = {}
+                        breakpoint_counts[chr_name][breakpoint] = breakpoint_counts[chr_name].get(breakpoint, 0) + 1
+                if map_regions[-1][-1] == 'S':
+                    breakpoint = read_start + len(entries[9]) - int(map_regions[-1][:-1])
+                    try:
+                        breakpoint_counts[chr_name][breakpoint] = breakpoint_counts[chr_name].get(breakpoint, 0) + 1
+                    ## if the dictionary doesn't exist yet for this chromosome, make it, then add the breakpoint
+                    except KeyError:
+                        breakpoint_counts[chr_name] = {}
+                        breakpoint_counts[chr_name][breakpoint] = breakpoint_counts[chr_name].get(breakpoint, 0) + 1                
+                            
 
     # Iterate over the keys and find the sliding-window average for each position.  Keep the breakpoint if it's >= threshold.
     # First grab the list of chromosome dictionaries, then for each chromosome, iterate over all stored positions in that chromosome
@@ -92,6 +97,7 @@ def find_clip_locations():
                 out_hits.write(chr_name + '\t' + str(i[0]) + '\t' + str(i[0] + 1) + '\t' + 'softclip\t' + str(i[1]) + '\n')
             for i in rejects_list:
                 out_rejects.write(chr_name + '\t' + str(i[0]) + '\t' + str(i[0] + 1) + '\t' + 'softclip\t' + str(i[1]) + '\n')
+
             
 if __name__ == '__main__':
     find_clip_locations()
