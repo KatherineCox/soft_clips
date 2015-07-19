@@ -12,12 +12,6 @@ import re
 import operator
 import argparse
 
-#import sys
-#in_file = sys.argv[1]
-#hits_file = sys.argv[2] + '_hits.bed'
-#rejects_file = sys.argv[2] + '_rejects.bed'
-#chr_name = 'gi|556503834|ref|NC_000913.3|'
-
 def parse_args():
     parser = argparse.ArgumentParser(description='Find the soft-clipped breakpoints')
     
